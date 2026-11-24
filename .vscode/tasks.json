@@ -1,0 +1,22 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    { "label": "1. Fresh start (rebuild + seed + website)", "type": "shell", "command": "scripts/run_all.sh",
+      "problemMatcher": [], "presentation": { "panel": "dedicated" } },
+    { "label": "2. Start databases", "type": "shell", "command": "scripts/services.sh start", "problemMatcher": [] },
+    { "label": "3. Start website (http://127.0.0.1:8765)", "type": "shell",
+      "command": ".venv/bin/python -m app.cli serve", "problemMatcher": [], "presentation": { "panel": "dedicated" } },
+    { "label": "4. Stop databases", "type": "shell", "command": "scripts/services.sh stop", "problemMatcher": [] },
+    { "label": "Run all tests", "type": "shell", "command": ".venv/bin/python -m pytest tests -q",
+      "group": { "kind": "test", "isDefault": true }, "problemMatcher": [] },
+    { "label": "Load datasets into PostgreSQL", "type": "shell",
+      "command": ".venv/bin/python -I scripts/import_datasets.py", "problemMatcher": [] },
+    { "label": "Open PostgreSQL shell (psql)", "type": "shell", "command": "scripts/db.sh psql", "problemMatcher": [] },
+    { "label": "Open MongoDB shell", "type": "shell", "command": "scripts/db.sh mongo", "problemMatcher": [] },
+    { "label": "Show DB connection details", "type": "shell", "command": "scripts/db.sh info", "problemMatcher": [] },
+    { "label": "Regenerate database tour", "type": "shell", "command": ".venv/bin/python -I scripts/db_tour.py", "problemMatcher": [] },
+    { "label": "Evaluate real-data detection (CTU-13)", "type": "shell",
+      "command": ".venv/bin/python -m app.cli evaluate-ctu", "problemMatcher": [] },
+    { "label": "Evaluate Ask AI", "type": "shell", "command": ".venv/bin/python -I scripts/eval_nl2sql.py", "problemMatcher": [] }
+  ]
+}

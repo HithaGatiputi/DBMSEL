@@ -1,0 +1,130 @@
+{
+  "cic_holdout": {
+    "n": 178286,
+    "attacks": 34195,
+    "roc_auc": 0.9982,
+    "avg_precision": 0.9898,
+    "precision": 0.9446,
+    "recall": 0.989
+  },
+  "cic_recall_by_attack": {
+    "DDoS": {
+      "n": 7538,
+      "detected_at_0.5": 0.999
+    },
+    "DoS Hulk": {
+      "n": 7433,
+      "detected_at_0.5": 0.99
+    },
+    "PortScan": {
+      "n": 7426,
+      "detected_at_0.5": 1.0
+    },
+    "DoS GoldenEye": {
+      "n": 3058,
+      "detected_at_0.5": 0.99
+    },
+    "FTP-Patator": {
+      "n": 2361,
+      "detected_at_0.5": 1.0
+    },
+    "SSH-Patator": {
+      "n": 1763,
+      "detected_at_0.5": 0.994
+    },
+    "DoS slowloris": {
+      "n": 1694,
+      "detected_at_0.5": 0.996
+    },
+    "DoS Slowhttptest": {
+      "n": 1656,
+      "detected_at_0.5": 0.998
+    },
+    "Bot": {
+      "n": 574,
+      "detected_at_0.5": 0.634
+    },
+    "Web Attack - Brute Force": {
+      "n": 453,
+      "detected_at_0.5": 0.947
+    },
+    "Web Attack - XSS": {
+      "n": 222,
+      "detected_at_0.5": 0.968
+    },
+    "Infiltration": {
+      "n": 11,
+      "detected_at_0.5": 0.909
+    },
+    "Heartbleed": {
+      "n": 3,
+      "detected_at_0.5": 1.0
+    },
+    "Web Attack - Sql Injection": {
+      "n": 3,
+      "detected_at_0.5": 0.333
+    }
+  },
+  "cic_false_positive_rate": 0.0138,
+  "cic_unseen_day_friday": {
+    "n": 231966,
+    "attacks": 51966,
+    "roc_auc": 0.8603,
+    "avg_precision": 0.6406,
+    "precision": 0.9025,
+    "recall": 0.3081
+  },
+  "ctu13_cross_dataset": {
+    "n": 46893,
+    "attacks": 22128,
+    "roc_auc": 0.8499,
+    "avg_precision": 0.874,
+    "precision": 0.9975,
+    "recall": 0.1245
+  },
+  "ctu13_heldout_scenarios": {
+    "n": 10521,
+    "attacks": 4749,
+    "roc_auc": 0.926,
+    "avg_precision": 0.9269,
+    "precision": 0.9276,
+    "recall": 0.6768,
+    "scenarios": [
+      5,
+      11,
+      12
+    ]
+  },
+  "ctu13_training_rows": 36372,
+  "trained_at": "2026-11-24T13:50:54+00:00",
+  "training_rows": 594616,
+  "attack_rows": 114616,
+  "features": [
+    "log_duration",
+    "log_bytes_sent",
+    "log_bytes_received",
+    "log_packets",
+    "log_bytes_per_pkt",
+    "recv_sent_ratio",
+    "zero_payload",
+    "port_web",
+    "port_remote",
+    "port_mail",
+    "port_dns",
+    "port_irc",
+    "port_smb",
+    "port_high",
+    "port_other"
+  ],
+  "feature_importance": {
+    "port_dns": 0.7454,
+    "port_remote": 0.0826,
+    "port_high": 0.0629,
+    "recv_sent_ratio": 0.0247,
+    "log_packets": 0.0146,
+    "log_bytes_per_pkt": 0.014,
+    "log_bytes_received": 0.0138,
+    "log_bytes_sent": 0.0127
+  },
+  "dataset": "CIC-IDS2017 + CTU-13 scenarios [1, 2, 3, 4, 6, 7, 8, 9, 10, 13] (real traffic)"
+}

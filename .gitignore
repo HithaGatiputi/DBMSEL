@@ -1,0 +1,8 @@
+.venv/
+.pgdata/
+.mongodata/
+*.log
+__pycache__/
+.env
+.secret_key
+data/raw/

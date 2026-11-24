@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Incident Investigation Console</title>
+<link rel="stylesheet" href="/static/style.css?v=10">
+</head><body>
+
+<div id="login" class="login" hidden>
+  <form id="loginForm" class="card loginCard" novalidate>
+    <div class="brand big"><span class="logo">&#9919;</span> Cyber Incident Investigation</div>
+    <p class="mut">Sign in as a Security Analyst or System Administrator.</p>
+    <label>Username<input id="lu" autocomplete="username" required minlength="3" maxlength="50" placeholder="analyst.rao"></label>
+    <label>Password<input id="lp" type="password" autocomplete="current-password" required maxlength="128"></label>
+    <div id="lerr" class="err"></div>
+    <button class="btn wide" type="submit">Sign in</button>
+    <p class="mut small">Demo accounts: <code>analyst.rao</code>, <code>analyst.menon</code>, <code>analyst.das</code> (Analyst) ·
+      <code>admin.iyer</code>, <code>admin.singh</code> (Admin). Password: <code>Rvce@2026</code></p>
+  </form>
+</div>
+
+<div id="app" hidden>
+<header>
+  <div class="brand"><span class="logo">&#9919;</span> Incident Investigation Console</div>
+  <nav id="nav">
+    <button data-tab="overview" class="on">Overview</button>
+    <button data-tab="incidents">Incidents</button>
+    <button data-tab="alerts">Alerts</button>
+    <button data-tab="events">Events</button>
+    <button data-tab="ask">Ask AI</button>
+    <button data-tab="reports">SQL Reports</button>
+    <button data-tab="logs">Raw Logs</button>
+    <button data-tab="audit">Audit</button>
+    <button data-tab="admin" class="adminOnly">Admin</button>
+    <button data-tab="design">Design</button>
+    <button data-tab="guide">How to use</button>
+  </nav>
+  <div class="who"><span id="whoami" class="pill"></span><span id="health" class="pill"></span>
+    <button class="btn sec sm" id="logout">Sign out</button></div>
+</header>
+<main>
+  <section id="tab-overview"></section>
+  <section id="tab-incidents" hidden></section>
+  <section id="tab-alerts" hidden></section>
+  <section id="tab-events" hidden></section>
+  <section id="tab-ask" hidden></section>
+  <section id="tab-reports" hidden></section>
+  <section id="tab-logs" hidden></section>
+  <section id="tab-audit" hidden></section>
+  <section id="tab-admin" hidden></section>
+  <section id="tab-design" hidden></section>
+  <section id="tab-guide" hidden></section>
+</main>
+</div>
+<div id="modal" class="modal" hidden><div class="card modalCard"><span class="close" id="mclose">&times;</span><div id="mbody"></div></div></div>
+<div id="toast" role="status"></div>
+<script src="/static/app.js?v=10"></script>
+</body></html>

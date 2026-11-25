@@ -5,6 +5,8 @@ const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmt = t => t ? String(t).replace("T", " ").slice(0, 19) : "";
+const fmtS = t => t ? `<span class="nw">${String(t).replace("T", " ").slice(0, 16)}</span>` : "";      // short, one line
+const human = c => String(c || "").replace(/_/g, " ");
 const sev = s => s ? `<span class="sev ${esc(s)}">${esc(s)}</span>` : "";
 const pill = s => `<span class="pill">${esc(s)}</span>`;
 // tiny, safe markdown for AI text: escape first, then **bold** and `code` only
@@ -74,7 +76,23 @@ $("#loginForm").onsubmit = async e => {
 // ---------------------------------------------------------------- tabs
 const loaders = { overview, incidents, alerts, events, ask, reports, logs, audit, admin, design, guide };
 $$("#nav button").forEach(b => b.onclick = () => show(b.dataset.tab));
+const PAGES = {
+  overview: ["Dashboard", "What needs your attention right now"],
+  incidents: ["Incidents", "Cases the system built automatically from related alerts. Click one to investigate it."],
+  alerts: ["Alerts", "Single suspicious events flagged by the detection rules and the machine-learning model"],
+  events: ["Events & logs", "Every recorded activity, plus a search of the original raw logs"],
+  ask: ["Ask AI", "Ask a question in plain English. The answer comes straight from the database, read-only."],
+  reports: ["Reports", "Ready-made database reports. View them here or download them as CSV."],
+  audit: ["Audit trail", "Every change to every incident: who, what and when. These records cannot be edited or deleted."],
+  admin: ["Admin", "Security self-test, automatic response, users, devices, detection rules and settings"],
+  guide: ["How to use", "A short step-by-step tour of the system"],
+  design: ["Project design", "Objectives, database design, normalisation and diagrams"],
+};
 function show(tab) {
+  if (tab === "logs") tab = "events";                       // raw-log search now lives on the Events page
+  if (!PAGES[tab]) tab = "overview";
+  $("#ptitle").textContent = PAGES[tab][0]; $("#psub").textContent = PAGES[tab][1];
+  window.scrollTo(0, 0);
   $$("#nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
   $$("main > section").forEach(s => s.hidden = s.id !== "tab-" + tab);
   store.set("tab", tab);
@@ -95,40 +113,58 @@ function flowCard(f, c) {
     `<h3>Detection by CIC-IDS2017 attack type (hold-out, threshold 0.5)</h3>` + bars(Object.entries(f.cic_recall_by_attack || {}).map(([k, v]) => ({ k, n: Math.round(v["detected_at_0.5"] * 100) })));
 }
 async function overview() {
-  const s = await api("/stats"), el = $("#tab-overview"), ml = s.ml || {}, au = s.automation || {};
+  const [s, list] = await Promise.all([api("/stats"), api("/incidents?limit=500")]);
+  const el = $("#tab-overview"), ml = s.ml || {}, au = s.automation || {};
+  const open = list.filter(i => ["New", "Investigating", "Contained"].includes(i.status));
+  const crit = open.filter(i => i.severity_level === "Critical").length;
+  const mine = open.filter(i => i.analyst === ME.username).length;
+  const kpi = (v, l, hint) => `<div class="card kpi" title="${esc(hint)}"><div class="v">${v}</div><div class="l">${l}</div></div>`;
   el.innerHTML = `
-  <div class="card"><div class="row" style="margin:0">
-    <b>Attack simulator</b>${ME.role !== "Admin" ? ` <span class="mut small">(Admin only; injected events are tagged "simulated")</span>` : ""}
-    <select id="scen" aria-label="Scenario">${["account_takeover_exfil", "recon_bruteforce", "insider_data_theft", "malware_outbreak", "privilege_abuse"].map(x => `<option>${x}</option>`).join("")}</select>
-    <button class="btn" id="sim" ${ME.role !== "Admin" ? "disabled" : ""}>&#9889; Inject attack</button>
-    <button class="btn sec" id="corr">Run correlation now</button>
-    <span class="mut small">Auto-correlation every ${au.auto_correlate_seconds}s · last ${fmt(au.last_correlation) || "—"} · live stream ${au.stream_on ? '<b class="ok">ON</b>' : "off"}</span>
-  </div></div><br>
   <div class="grid g4">
-    <div class="card kpi"><div class="v">${s.my_open}</div><div class="l">Assigned to me (open)</div></div>
-    <div class="card kpi"><div class="v">${s.events.toLocaleString()}</div><div class="l">Security events</div></div>
-    <div class="card kpi"><div class="v">${s.alerts}</div><div class="l">System alerts</div></div>
-    <div class="card kpi"><div class="v">${s.open_incidents} <span class="mut" style="font-size:16px">/ ${s.incidents}</span></div><div class="l">Open / total incidents</div></div>
-    <div class="card kpi"><div class="v">${s.active_blocks} <span class="mut" style="font-size:16px">/ ${s.blocked_attempts}</span></div><div class="l">Active blocks / blocked attempts</div></div>
+    ${kpi(open.length, "Open incidents", "Cases still being worked on (New, Investigating or Contained)")}
+    ${kpi(`<span style="color:var(--Critical)">${crit}</span>`, "Critical &amp; open", "Open cases with the highest danger score (75 or more)")}
+    ${kpi(mine, "Assigned to me", "Open cases you are responsible for")}
+    ${kpi(s.blocked_attempts, "Attacker attempts blocked", "Activity from blocked IP addresses or disabled accounts after containment")}
   </div><br>
+  <div class="card"><div class="cardhead"><h3>Needs attention</h3><a href="#" id="allinc">All incidents →</a></div>
+    ${open.length ? table([{ h: "Severity", f: r => sev(r.severity_level) }, { h: "Incident", f: r => `<b>${esc(r.title)}</b>` },
+      { h: "Risk", f: r => `<b>${r.risk_score}</b>` }, { h: "Status", f: r => pill(r.status) },
+      { h: "Analyst", f: r => esc(r.analyst || "unassigned") }], open.slice(0, 6), true)
+      : `<p class="mut">Nothing open. 🎉</p>`}</div><br>
   <div class="grid g2">
     <div class="card"><h3>Incidents by severity</h3>${bars(["Critical", "High", "Medium", "Low"].map(k => ({ k, n: (s.by_severity.find(x => x.k === k) || { n: 0 }).n })))}</div>
-    <div class="card"><h3>Incidents by status</h3>${bars(s.by_status)}</div>
-    <div class="card"><h3>Events by category</h3>${bars(s.by_category)}</div>
-    <div class="card"><h3>Events per day</h3>${table([{ h: "Day", k: "d" }, { h: "Events", k: "n" }, { h: "Risk ≥ 50", k: "risky" }], s.events_per_day)}</div>
-    <div class="card"><h3>Flow model · real traffic (CIC-IDS2017 + CTU-13)</h3>${flowCard(s.flow_ml || {}, s.ctu_eval || {})}</div>
-    <div class="card"><h3>Behaviour model · login/file/privilege sequences</h3>
-      <p>ROC-AUC <b>${ml.roc_auc_blended ?? "–"}</b> · Precision@0.5 <b>${ml["precision_at_0.5"] ?? "–"}</b> · Recall@0.5 <b>${ml["recall_at_0.5"] ?? "–"}</b> · test events ${ml.test_events ?? "–"}</p>
-      <p class="mut small">There is no public labelled dataset of authentication, file and privilege sequences, so this model is trained on simulated telemetry. Its scores are optimistic. Network events in a user session take the higher of this score and the real-data flow model. Host-only flows use the flow model alone.</p>
-      <h3>Top features</h3>${bars(Object.entries(ml.feature_importance || {}).map(([k, n]) => ({ k, n: +(n * 100).toFixed(1) })))}</div>
-  </div>`;
-  $("#sim").onclick = () => safe(async () => {
-    $("#sim").disabled = true; toast("Injecting attack through ML scorer…");
+    <div class="card"><h3>What kind of activity was recorded</h3>${bars(s.by_category.map(x => ({ k: x.k.replace(/_/g, " "), n: x.n })))}</div>
+  </div><br>
+  <div class="grid g4">
+    ${kpi(s.events.toLocaleString(), "Events recorded", "All activity records stored")}
+    ${kpi(s.alerts, "Alerts raised", "Events the rules or ML flagged as suspicious")}
+    ${kpi(s.incidents, "Incidents in total", "All cases, including closed ones")}
+    ${kpi(s.active_blocks, "Active blocks", "Attacker IPs and accounts currently blocked")}
+  </div><br>
+  ${ME.role === "Admin" ? `<div class="card"><h3>Demo tools (Admin)</h3>
+    <p class="mut">Launch a simulated attack to see the system detect it, connect the steps into one incident and contain it. Simulated data is always labelled “simulated”.</p>
+    <div class="row" style="margin:0">
+      <select id="scen" aria-label="Attack scenario">${[["account_takeover_exfil", "Account takeover + data theft"], ["recon_bruteforce", "Port scan + password guessing"], ["insider_data_theft", "Insider steals data"], ["malware_outbreak", "Malware infection"], ["privilege_abuse", "Privilege abuse"]].map(([v, t]) => `<option value="${v}">${t}</option>`).join("")}</select>
+      <button class="btn" id="sim">⚡ Launch attack</button>
+      <button class="btn sec" id="corr" title="Correlation also runs automatically every ${au.auto_correlate_seconds}s">Re-check alerts now</button>
+    </div></div><br>` : ""}
+  <details class="card"><summary><b>Detection model results</b> <span class="mut">(technical details)</span></summary><br>
+    <div class="grid g2">
+      <div><h3>Network model · trained on real traffic</h3>${flowCard(s.flow_ml || {}, s.ctu_eval || {})}</div>
+      <div><h3>Behaviour model · logins, files, privileges</h3>
+        <p>ROC-AUC <b>${ml.roc_auc_blended ?? "–"}</b> · Precision <b>${ml["precision_at_0.5"] ?? "–"}</b> · Recall <b>${ml["recall_at_0.5"] ?? "–"}</b></p>
+        <p class="mut small">Trained on simulated activity, because no public labelled dataset of logins and file access exists, so these scores are optimistic. Network activity is also checked by the real-data model.</p>
+        <h3>Most useful signals</h3>${bars(Object.entries(ml.feature_importance || {}).map(([k, n]) => ({ k: k.replace(/_/g, " "), n: +(n * 100).toFixed(1) })))}</div>
+    </div></details>`;
+  bindRows("#tab-overview .card", open.slice(0, 6), r => { show("incidents"); safe(() => incidentDetail(r.incident_id)); });
+  $("#allinc").onclick = e => { e.preventDefault(); show("incidents"); };
+  if ($("#sim")) $("#sim").onclick = () => safe(async () => {
+    $("#sim").disabled = true; toast("Launching the simulated attack…");
     const r = await api("/simulate", { body: { scenario: $("#scen").value } });
-    toast(`Injected ${r.events_injected} events → incident #${r.incident_id}`);
+    toast(`Attack detected: ${r.events_injected} events grouped into incident #${r.incident_id}`);
     if (r.incident_id) { show("incidents"); incidentDetail(r.incident_id); } else overview();
   }).finally(() => { const b = $("#sim"); if (b) b.disabled = false; });
-  $("#corr").onclick = () => safe(async () => { const r = await api("/correlate", { body: { window_minutes: 30 } }); toast(`Correlation: ${r.incidents_created} new incidents, ${r.events_linked} events linked`); overview(); });
+  if ($("#corr")) $("#corr").onclick = () => safe(async () => { const r = await api("/correlate", { body: { window_minutes: 30 } }); toast(`Done: ${r.incidents_created} new incident(s), ${r.events_linked} alert(s) linked`); overview(); });
 }
 
 // ----------------------------------------------------------- incidents
@@ -145,7 +181,7 @@ async function incidents() {
     const rows = await api("/incidents?" + q);
     $("#il").innerHTML = `<p class="mut small">${rows.length} incident(s). Click a row to investigate.</p>` + table([{ h: "#", k: "incident_id" }, { h: "Title", k: "title" }, { h: "Severity", f: r => sev(r.severity_level) }, { h: "Risk", k: "risk_score" },
     { h: "Status", f: r => pill(r.status) }, { h: "Primary entity", f: r => esc(r.primary_user || r.primary_device || "") + (r.user_entity_role ? `<br><span class="mut small">${esc(r.user_entity_role)}</span>` : "") },
-    { h: "Events", k: "event_count" }, { h: "Data", f: r => (r.sources || []).map(srcBadge).join(" ") || pill("sensor") }, { h: "Analyst", f: r => esc(r.analyst || "—") }, { h: "First seen", f: r => fmt(r.first_event) }], rows, true);
+    { h: "Events", k: "event_count" }, { h: "Analyst", f: r => esc(r.analyst || "—") }, { h: "First seen", f: r => fmtS(r.first_event) }], rows, true);
     bindRows("#il", rows, r => incidentDetail(r.incident_id));
   };
   $("#fs").onchange = $("#fv").onchange = $("#fm").onchange = () => safe(load); await load();
@@ -161,7 +197,7 @@ async function incidentDetail(id) {
   <div class="card"><div class="row"><h2 style="margin:0">#${i.incident_id} ${esc(i.title)}</h2>${sev(i.severity_level)}${pill(i.status)}<b>Risk ${i.risk_score}/100</b></div>
     ${(i.sources || []).filter(x => x !== "sensor").length ? `<p class="small">${(i.sources || []).map(srcBadge).join(" ")} <span class="mut">this incident contains ${(i.sources || []).includes("simulator") ? "simulated" : "replayed dataset"} events, not live sensor data</span></p>` : ""}
     <p class="mut">Analyst: <b>${esc(i.analyst || "unassigned")}</b> · Primary user: ${esc(i.primary_user || "—")} ${i.user_entity_role ? pill(i.user_entity_role) : ""} · Primary device: ${esc(i.primary_device || "—")} ${i.device_entity_role ? pill(i.device_entity_role) : ""} · Created ${fmt(i.created_at)} · Updated ${fmt(i.updated_at)}${i.resolved_at ? " · Resolved " + fmt(i.resolved_at) : ""}</p>
-    <div class="row">
+    <div class="row actionsrow">
       ${canTake ? `<button class="btn" id="asg">Assign to me</button>` : ""}
       ${isAdmin && !closed ? `<select id="asgTo" aria-label="Assign to">${STAFF.map(s => `<option value="${s.user_id}">${esc(s.username)}</option>`).join("")}</select><button class="btn sec" id="asgOther">Assign</button>` : ""}
       ${allowed.length && canAct ? `<select id="ns" aria-label="New status">${allowed.map(s => `<option>${s}</option>`).join("")}</select><input id="nsNote" placeholder="reason" maxlength="1000"><button class="btn sec" id="sts">Change status</button>` : ""}
@@ -171,7 +207,7 @@ async function incidentDetail(id) {
     <p><b>Analysis</b> ${pill(d.explanation_source)} ${d.ai_available && d.explanation_source === "rule-based" ? `<button class="btn sec sm" id="aiexp">✨ AI explanation</button>` : ""}<br><span id="expl">${md(d.explanation)}</span></p>
     <div class="chain">${d.kill_chain.map(k => `<span>${esc(k.tactic)} (${esc(k.technique)})</span>`).join("")}</div></div><br>
   <div class="grid g2">
-    <div class="card"><h3>Event timeline (${d.timeline.length})</h3><div class="tl">${d.timeline.map(t => `<div class="st" style="--c:${SEV_COL[t.severity]}"><b>${t.step_sequence}. ${esc(t.event_category)}</b> ${sev(t.severity)} ${t.blocked ? '<span class="pill blk">⛔ BLOCKED</span>' : ""} <span class="mut small">risk ${t.risk_score} · anomaly ${t.anomaly_score}</span><br>
+    <div class="card"><h3>Event timeline (${d.timeline.length})</h3><div class="tl">${d.timeline.map(t => `<div class="st" style="--c:${SEV_COL[t.severity]}"><b>${t.step_sequence}. ${esc(t.event_category)}</b> ${sev(t.severity)} ${t.blocked ? '<span class="pill blk">⛔ BLOCKED</span>' : ""} <span class="mut small" title="Risk: how dangerous this step is (0–100). Anomaly: how unusual the ML model found it (0–1).">risk ${t.risk_score} · anomaly ${t.anomaly_score}</span><br>
       <span class="mut small">${fmt(t.event_timestamp)} · ${esc(t.username || "—")} @ ${esc(t.hostname)} · src ${esc(t.source_ip || "—")}</span><br><span class="mut small">${esc(t.detail || "")}</span><br>
       <a href="#" class="raw" data-e="${t.event_id}">raw log (MongoDB)</a> · <a href="#" class="win" data-e="${t.event_id}">±30 min context</a> <span class="mut small">· event ${t.event_id} · ${esc(t.correlation_rule)}</span> ${srcBadge(t.event_source)}</div>`).join("")}</div></div>
     <div>
@@ -270,16 +306,19 @@ async function alerts() {
 // -------------------------------------------------------------- events
 async function events() {
   const el = $("#tab-events");
-  el.innerHTML = `<div class="row"><select id="ec" aria-label="Category"><option value="">All categories</option>${CATS.map(c => `<option>${c}</option>`).join("")}</select>
+  el.innerHTML = `<div class="card"><h3>Recorded events</h3><p class="mut small">Click a row to see the original log for that event.</p><div class="row"><select id="ec" aria-label="Category"><option value="">All categories</option>${CATS.map(c => `<option>${c}</option>`).join("")}</select>
     <label style="flex-direction:row;align-items:center;gap:6px">Min risk <input id="er" type="number" min="0" max="100" value="40" style="width:80px"></label>
     <label style="flex-direction:row;align-items:center"><input type="checkbox" id="ea"> Alerted only</label>
-    <button class="btn sec" id="eg">Filter</button></div><div class="card" id="el"></div>`;
+    <button class="btn sec" id="eg">Filter</button></div><div id="el"></div></div><br><div id="logsbox"></div>`;
+  logs($("#logsbox"));
   const load = async () => {
     const mr = Math.min(100, Math.max(0, +$("#er").value || 0)); $("#er").value = mr;
     const q = new URLSearchParams({ min_risk: mr, limit: 200 }); if ($("#ec").value) q.set("category", $("#ec").value); if ($("#ea").checked) q.set("alerted", "true");
     const rows = await api("/events?" + q);
-    $("#el").innerHTML = table([{ h: "Event", k: "event_id" }, { h: "Time", f: r => fmt(r.event_timestamp) }, { h: "Category", k: "event_category" }, { h: "Severity", f: r => sev(r.severity) }, { h: "Risk", k: "risk_score" },
-    { h: "Anomaly", k: "anomaly_score" }, { h: "User", k: "username" }, { h: "Host", k: "hostname" }, { h: "Src IP", k: "source_ip" }, { h: "Alert", f: r => r.alerted ? "●" : "" }, { h: "Blocked", f: r => r.blocked ? '<span class="pill blk">⛔</span>' : "" }, { h: "Data", f: r => srcBadge(r.event_source) }, { h: "Incident", f: r => r.incident_id ? "#" + r.incident_id : "—" }], rows, true);
+    $("#el").innerHTML = table([{ h: "When", f: r => fmtS(r.event_timestamp) }, { h: "Activity", f: r => `<b>${esc(human(r.event_category))}</b>` },
+      { h: "Severity", f: r => sev(r.severity) }, { h: "Risk", k: "risk_score" }, { h: "Who / where", f: r => `${esc(r.username || "—")}<br><span class="mut small">${esc(r.hostname)} · ${esc(r.source_ip || "")}</span>` },
+      { h: "Tags", f: r => [r.alerted ? '<span class="pill">alert</span>' : "", r.blocked ? '<span class="pill blk">blocked</span>' : "", srcBadge(r.event_source)].join(" ") },
+      { h: "Incident", f: r => r.incident_id ? "#" + r.incident_id : '<span class="mut">—</span>' }], rows, true);
     bindRows("#el", rows, r => safe(() => showRaw(r.event_id)));
   };
   $("#eg").onclick = () => safe(load); await load();
@@ -318,9 +357,9 @@ async function reports() {
 }
 
 // ---------------------------------------------------------------- logs
-function logs() {
-  const el = $("#tab-logs");
-  el.innerHTML = `<div class="card"><h3>Full-text search over raw logs (MongoDB)</h3><p class="mut">Raw, semi-structured payloads such as packet samples, stack traces and syslog lines live in MongoDB. Each PostgreSQL event points at its document through <code>raw_log_ref</code>, and each document stores <code>sql_event_id</code> pointing back.</p>
+function logs(target) {
+  const el = target || $("#tab-events");
+  el.innerHTML = `<div class="card"><h3>Search the original logs</h3><p class="mut">The untouched original records (syslog lines, packet samples, malware traces) are kept in MongoDB, each linked to its event in PostgreSQL.</p>
     <form id="lf" class="row" novalidate><input id="lq" style="flex:1" maxlength="100" placeholder="e.g. polkit, Emotet, Mirai, restricted, backup"><button class="btn">Search</button></form><div class="ferr" id="lerr2"></div><div id="lr"></div></div>`;
   $("#lf").onsubmit = e => { e.preventDefault(); const q = $("#lq").value.trim(); $("#lerr2").textContent = "";
     if (q.length < 2) return $("#lerr2").textContent = "Enter at least 2 characters.";
@@ -546,11 +585,11 @@ async function boot() {
     return;
   }
   $("#login").hidden = true; $("#app").hidden = false;
-  $("#whoami").innerHTML = `<a href="#" id="chpw" title="Change password">${esc(ME.username)} · ${esc(ME.role)}</a>`;
+  $("#whoami").innerHTML = `<a href="#" id="chpw" title="Click to change your password"><b>${esc(ME.username)}</b> <span class="mut">${esc(ME.role)}</span></a>`;
   $("#chpw").onclick = e => { e.preventDefault(); modal(`<h3>Change password</h3>` + passwordForm(false)); bindPasswordForm(() => { $("#modal").hidden = true; }); };
   $$(".adminOnly").forEach(b => b.hidden = ME.role !== "Admin");
   STAFF = (await api("/users")).filter(u => ["Analyst", "Admin"].includes(u.role));
-  api("/health").then(h => $("#health").textContent = `PostgreSQL ✓ · ${h.raw_store} · AI: ${h.llm}`).catch(() => { });
+  api("/health").then(h => $("#health").innerHTML = `<span class="dot"></span> System online<br><span class="mut">PostgreSQL · ${esc(h.raw_store === "mongodb" ? "MongoDB" : h.raw_store)}<br>AI: ${esc(h.llm.replace(/ \(.*\)/, ""))}</span>`).catch(() => { });
   let tab = store.get("tab") || "overview"; if (tab === "admin" && ME.role !== "Admin") tab = "overview";
   show(tab);
 }

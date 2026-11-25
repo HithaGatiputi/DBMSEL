@@ -2,7 +2,10 @@
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Incident Investigation Console</title>
-<link rel="stylesheet" href="/static/style.css?v=10">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/static/style.css?v=13">
 </head><body>
 
 <div id="login" class="login" hidden>
@@ -19,23 +22,30 @@
 </div>
 
 <div id="app" hidden>
-<header>
-  <div class="brand"><span class="logo">&#9919;</span> Incident Investigation Console</div>
-  <nav id="nav">
-    <button data-tab="overview" class="on">Overview</button>
+<aside class="side">
+  <div class="brand"><span class="logo">&#9670;</span> Incident <br>Investigation</div>
+  <nav id="nav" aria-label="Main">
+    <div class="grp">Investigate</div>
+    <button data-tab="overview" class="on">Dashboard</button>
     <button data-tab="incidents">Incidents</button>
     <button data-tab="alerts">Alerts</button>
-    <button data-tab="events">Events</button>
+    <button data-tab="events">Events &amp; logs</button>
+    <div class="grp">Tools</div>
     <button data-tab="ask">Ask AI</button>
-    <button data-tab="reports">SQL Reports</button>
-    <button data-tab="logs">Raw Logs</button>
-    <button data-tab="audit">Audit</button>
+    <button data-tab="reports">Reports</button>
+    <button data-tab="audit">Audit trail</button>
+    <div class="grp adminOnly">Manage</div>
     <button data-tab="admin" class="adminOnly">Admin</button>
-    <button data-tab="design">Design</button>
+    <div class="grp">Help</div>
     <button data-tab="guide">How to use</button>
+    <button data-tab="design">Project design</button>
   </nav>
-  <div class="who"><span id="whoami" class="pill"></span><span id="health" class="pill"></span>
-    <button class="btn sec sm" id="logout">Sign out</button></div>
+  <div class="sidefoot" id="health"></div>
+</aside>
+<div class="maincol">
+<header class="top">
+  <div><h1 id="ptitle">Dashboard</h1><p id="psub" class="mut"></p></div>
+  <div class="who"><span id="whoami"></span><button class="btn sec sm" id="logout">Sign out</button></div>
 </header>
 <main>
   <section id="tab-overview"></section>
@@ -51,7 +61,8 @@
   <section id="tab-guide" hidden></section>
 </main>
 </div>
+</div>
 <div id="modal" class="modal" hidden><div class="card modalCard"><span class="close" id="mclose">&times;</span><div id="mbody"></div></div></div>
 <div id="toast" role="status"></div>
-<script src="/static/app.js?v=10"></script>
+<script src="/static/app.js?v=13"></script>
 </body></html>

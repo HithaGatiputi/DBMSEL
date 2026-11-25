@@ -237,6 +237,7 @@ CREATE TABLE response_policy (
     min_risk           NUMERIC(5,2) NOT NULL DEFAULT 75 CHECK (min_risk BETWEEN 0 AND 100),
     block_external_ips BOOLEAN NOT NULL DEFAULT TRUE,
     disable_accounts   BOOLEAN NOT NULL DEFAULT TRUE,
+    contain_on_takeover BOOLEAN NOT NULL DEFAULT TRUE,   -- brute-force break-in: contain at once, whatever the score
     is_active          BOOLEAN NOT NULL DEFAULT TRUE
 );
 

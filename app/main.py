@@ -158,6 +158,19 @@ def stats(u: dict = Depends(current_user)):
     })
 
 
+@app.get("/api/live")
+def live(u: dict = Depends(current_user)):
+    """Cheap change-detection for the dashboard's live updates."""
+    return j(db.one("""SELECT (SELECT COALESCE(MAX(alert_id), 0) FROM system_alerts) AS last_alert,
+                              (SELECT COALESCE(MAX(incident_id), 0) FROM incidents) AS last_incident,
+                              (SELECT COALESCE(MAX(block_id), 0) FROM blocked_entities) AS last_block,
+                              (SELECT COUNT(*) FROM security_events WHERE blocked) AS blocked_attempts,
+                              (SELECT row_to_json(x) FROM (SELECT incident_id, title, severity_level, risk_score
+                                 FROM incidents ORDER BY updated_at DESC LIMIT 1) x) AS latest_incident,
+                              (SELECT row_to_json(b) FROM (SELECT entity_type, entity, incident_id FROM v_blocks
+                                 ORDER BY block_id DESC LIMIT 1) b) AS latest_block"""))
+
+
 @app.get("/api/users")
 def users(role: str | None = None, u: dict = Depends(current_user)):
     return j(db.query("SELECT user_id, username, role, department FROM users WHERE is_active AND "
@@ -285,6 +298,7 @@ def attacker_returns(iid: int, u: dict = Depends(admin_user)):
 
 class PolicyPatch(BaseModel):
     min_risk: float | None = Field(None, ge=0, le=100)
+    contain_on_takeover: bool | None = None
     block_external_ips: bool | None = None
     disable_accounts: bool | None = None
     is_active: bool | None = None

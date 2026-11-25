@@ -261,7 +261,9 @@ BEGIN
     -- automated response: contain incidents that reached the policy's risk level
     FOR v_inc IN SELECT i.incident_id FROM incidents i, response_policy p
                   WHERE p.is_active AND i.incident_id = ANY(v_touched)
-                    AND i.status IN ('New','Investigating','Contained') AND i.risk_score >= p.min_risk LOOP
+                    AND i.status IN ('New','Investigating','Contained')
+                    AND (i.risk_score >= p.min_risk
+                         OR (p.contain_on_takeover AND fn_takeover_pattern(i.incident_id))) LOOP
         PERFORM sp_auto_contain(v_inc);
     END LOOP;
     PERFORM set_config('app.actor', '', true);
@@ -431,6 +433,19 @@ LANGUAGE sql IMMUTABLE AS $$
     SELECT p_ip << '10.0.0.0/8' OR p_ip << '172.16.0.0/12' OR p_ip << '192.168.0.0/16' OR p_ip << '127.0.0.0/8';
 $$;
 
+-- Brute-force break-in: an outside IP failed 5+ times and then logged in.
+-- Unambiguous enough to contain at once, before any risk threshold is reached.
+CREATE OR REPLACE FUNCTION fn_takeover_pattern(p_incident INT) RETURNS BOOLEAN
+LANGUAGE sql STABLE AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM incident_events ie JOIN security_events s ON s.event_id = ie.event_id
+         WHERE ie.incident_id = p_incident AND s.event_category = 'successful_login'
+           AND s.source_ip IS NOT NULL AND NOT fn_is_internal_ip(s.source_ip)
+           AND (SELECT COUNT(*) FROM incident_events ie2 JOIN security_events f ON f.event_id = ie2.event_id
+                 WHERE ie2.incident_id = p_incident AND f.event_category = 'failed_login'
+                   AND f.source_ip = s.source_ip AND f.event_timestamp <= s.event_timestamp) >= 5);
+$$;
+
 -- Automated containment of one incident. Idempotent. Never disables Analyst or
 -- Admin accounts (automation must not lock out the responders); those are
 -- flagged in the audit trail for a human decision instead.
@@ -449,7 +464,8 @@ BEGIN
                     AND NOT fn_is_internal_ip(e.source_ip) LOOP
             IF NOT EXISTS (SELECT 1 FROM blocked_entities WHERE entity_type='ip' AND entity_value=r.ip AND active) THEN
                 INSERT INTO blocked_entities (entity_type, entity_value, incident_id, reason)
-                VALUES ('ip', r.ip, p_incident, 'automatic: critical incident #' || p_incident);
+                VALUES ('ip', r.ip, p_incident, CASE WHEN fn_takeover_pattern(p_incident)
+                        THEN 'automatic: brute-force break-in in incident #' ELSE 'automatic: critical incident #' END || p_incident);
                 n := n + 1;
             END IF;
         END LOOP;

@@ -139,3 +139,10 @@ tr.click:hover{background:var(--card2)}
 .actionsrow{gap:8px;padding:12px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin:8px 0 14px}
 .actionsrow input{min-width:160px}
 td{font-size:13.5px}
+
+/* live banner */
+#live{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:30;max-width:min(720px,92vw);
+      background:var(--card);border:1px solid var(--line);border-left:5px solid var(--acc);border-radius:10px;
+      padding:12px 18px;box-shadow:0 10px 30px rgba(30,51,40,.18);font-size:14px;animation:drop .25s ease-out}
+#live.bad{border-left-color:var(--Critical)}#live.warn{border-left-color:var(--Medium)}#live.ok{border-left-color:var(--Low)}
+@keyframes drop{from{transform:translate(-50%,-12px);opacity:0}to{transform:translate(-50%,0);opacity:1}}

@@ -88,6 +88,7 @@ const PAGES = {
   guide: ["How to use", "A short step-by-step tour of the system"],
   design: ["Project design", "Objectives, database design, normalisation and diagrams"],
 };
+let VIEW = "overview";
 function show(tab) {
   if (tab === "logs") tab = "events";                       // raw-log search now lives on the Events page
   if (!PAGES[tab]) tab = "overview";
@@ -96,6 +97,7 @@ function show(tab) {
   $$("#nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
   $$("main > section").forEach(s => s.hidden = s.id !== "tab-" + tab);
   store.set("tab", tab);
+  VIEW = tab;
   safe(() => loaders[tab]());
 }
 
@@ -188,6 +190,7 @@ async function incidents() {
 }
 
 async function incidentDetail(id) {
+  VIEW = "incident:" + id;
   const d = await api("/incidents/" + id), i = d.incident, el = $("#tab-incidents");
   const isAdmin = ME.role === "Admin", mine = i.analyst === ME.username, closed = ["Closed", "False Positive"].includes(i.status);
   const canAct = isAdmin || mine, canTake = !closed && i.status !== "Resolved" && (!i.analyst || isAdmin) && !mine;
@@ -402,6 +405,7 @@ async function admResponse() {
       <label>Contain incidents with risk ≥<input id="p_risk" type="number" min="0" max="100" value="${p.min_risk}"></label>
       <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="p_ip" ${p.block_external_ips ? "checked" : ""}> Block external attacker IPs</label>
       <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="p_acc" ${p.disable_accounts ? "checked" : ""}> Disable compromised / insider accounts</label>
+      <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="p_tko" ${p.contain_on_takeover ? "checked" : ""}> Contain at once when a brute-force login succeeds</label>
       <label style="flex-direction:row;align-items:center;gap:6px"><input type="checkbox" id="p_on" ${p.is_active ? "checked" : ""}> Policy active</label>
       <button class="btn">Save</button></form>
     <p class="mut small">Runs inside PostgreSQL (<code>sp_auto_contain</code>) after each correlation. Analyst and Admin accounts are never disabled automatically; they are flagged for manual review. Later events from a blocked IP or account are still recorded as evidence, but flagged <b>blocked</b> and raise a BLOCKED_ATTEMPT alert.</p></div><br>
@@ -411,7 +415,7 @@ async function admResponse() {
       { h: "Status", f: b => b.active ? `<button class="btn sec sm lift2" data-b="${b.block_id}">Lift…</button>` : `lifted by ${esc(b.lifted_by)}: ${esc(b.lift_reason)}` }], rows)}</div>`;
   $("#pf").onsubmit = e => { e.preventDefault(); const r = +$("#p_risk").value;
     if (!(r >= 0 && r <= 100)) return toast("Risk must be 0–100", true);
-    safe(async () => { await api("/admin/response-policy", { method: "PATCH", body: { min_risk: r, block_external_ips: $("#p_ip").checked, disable_accounts: $("#p_acc").checked, is_active: $("#p_on").checked } }); toast("Policy saved"); admResponse(); }); };
+    safe(async () => { await api("/admin/response-policy", { method: "PATCH", body: { min_risk: r, block_external_ips: $("#p_ip").checked, disable_accounts: $("#p_acc").checked, contain_on_takeover: $("#p_tko").checked, is_active: $("#p_on").checked } }); toast("Policy saved"); admResponse(); }); };
   $$("#adm .lift2").forEach(b => b.onclick = () => { const why = prompt("Reason for lifting this block (required):");
     if (why && why.trim().length >= 5) safe(async () => { await api(`/blocks/${b.dataset.b}/lift`, { body: { reason: why.trim() } }); toast("Block lifted"); admResponse(); });
     else if (why !== null) toast("A reason of at least 5 characters is required", true); });
@@ -551,6 +555,37 @@ function guide() {
   <h3>Roles</h3><p class="mut"><b>Analyst:</b> investigate, pick up unassigned incidents, and work (actions, evidence, status) only on their own. <b>Admin:</b> everything an analyst can do on any incident, plus re-assign, inject simulated attacks, run the integrity check, and manage users, devices, rules and automation. Every event is tagged <b>sensor</b>, <b>simulated</b> or <b>CTU-13 real</b>, so test data can never pass as real evidence.</p></div>`;
 }
 
+// ---------------------------------------------------------------- live
+// Every few seconds: if a new alert, incident or block appeared, show a banner
+// and refresh list pages (never a page where the user may be typing).
+let LIVE = null, LIVE_TIMER = null;
+function banner(html, kind) {
+  const b = $("#live"); b.className = kind || ""; b.innerHTML = html; b.hidden = false;
+  clearTimeout(banner.h); banner.h = setTimeout(() => b.hidden = true, 9000);
+  b.querySelectorAll("a[data-inc]").forEach(a => a.onclick = e => { e.preventDefault(); b.hidden = true; show("incidents"); safe(() => incidentDetail(+a.dataset.inc)); });
+}
+async function livePoll() {
+  if (!TOKEN || $("#app").hidden || document.hidden) return;
+  let now; try { now = await api("/live"); } catch { return; }
+  if (LIVE) {
+    const inc = now.latest_incident, blk = now.latest_block;
+    if (now.last_block > LIVE.last_block && blk) {
+      banner(`🛡 <b>Contained automatically:</b> ${blk.entity_type === "ip" ? "attacker IP" : "account"} <b>${esc(blk.entity)}</b> blocked ${blk.incident_id ? `— <a href="#" data-inc="${blk.incident_id}">incident #${blk.incident_id}</a>` : ""}`, "ok");
+    } else if (now.blocked_attempts > LIVE.blocked_attempts) {
+      banner(`⛔ <b>${now.blocked_attempts - LIVE.blocked_attempts} attacker attempt(s) blocked</b>${inc ? ` — <a href="#" data-inc="${inc.incident_id}">incident #${inc.incident_id}</a>` : ""}`, "bad");
+    } else if (now.last_incident > LIVE.last_incident && inc) {
+      banner(`🔴 <b>New incident #${inc.incident_id}:</b> ${esc(inc.title)} — ${esc(inc.severity_level)} · <a href="#" data-inc="${inc.incident_id}">open</a>`, "bad");
+    } else if (now.last_alert > LIVE.last_alert) {
+      banner(`⚠ <b>${now.last_alert - LIVE.last_alert} new alert(s)</b>${inc ? ` — <a href="#" data-inc="${inc.incident_id}">incident #${inc.incident_id}</a> · ${esc(inc.severity_level)}, risk ${inc.risk_score}` : ""}`, "warn");
+    }
+    const changed = now.last_alert !== LIVE.last_alert || now.last_block !== LIVE.last_block || now.blocked_attempts !== LIVE.blocked_attempts;
+    if (changed && ["overview", "alerts", "incidents", "events", "audit"].includes(VIEW)) safe(() => loaders[VIEW]());
+    if (changed && VIEW.startsWith("incident:") && !document.activeElement.matches("input,textarea,select"))
+      safe(() => incidentDetail(+VIEW.split(":")[1]));
+  }
+  LIVE = now;
+}
+
 // ---------------------------------------------------------------- boot
 function passwordForm(forced) {
   return `<form id="pwForm" class="form" novalidate>
@@ -592,5 +627,6 @@ async function boot() {
   api("/health").then(h => $("#health").innerHTML = `<span class="dot"></span> System online<br><span class="mut">PostgreSQL · ${esc(h.raw_store === "mongodb" ? "MongoDB" : h.raw_store)}<br>AI: ${esc(h.llm.replace(/ \(.*\)/, ""))}</span>`).catch(() => { });
   let tab = store.get("tab") || "overview"; if (tab === "admin" && ME.role !== "Admin") tab = "overview";
   show(tab);
+  LIVE = null; livePoll(); clearInterval(LIVE_TIMER); LIVE_TIMER = setInterval(livePoll, 3000);
 }
 boot();

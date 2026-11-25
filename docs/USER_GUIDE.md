@@ -67,6 +67,18 @@ Only Analyst and Admin accounts can sign in. Accounts an Admin creates (or reset
 13. **Real botnet data:** on **Overview**, the flow-model card shows the real-data results. In **SQL Reports**, open *Real botnet replay (CTU-13): alerts per host* to see which replayed machines raised alerts. In **Incidents**, look for titles ending in `[ctu…]`.
 14. **Design** tab: objectives, normalisation summary, SQL + NoSQL integration, societal relevance, and the ER, relational and DFD diagrams. Click a diagram to enlarge it.
 
+## 3b. Live attack demo (best for presentations)
+
+1. Start the website and sign in as `admin.iyer`; stay on the **Dashboard**.
+2. In a **second Terminal window**, from the project folder:
+   ```bash
+   .venv/bin/python scripts/live_attack.py
+   ```
+3. Put the two windows side by side. The Terminal narrates each attacker step and the system's reaction. The website shows banners at the top as alerts arrive, then **"Contained automatically"** when the break-in succeeds, then **"attacker attempts blocked"**, and the *Attacker attempts blocked* counter climbs.
+4. Afterwards open the incident it names (Incidents → #N): the timeline shows the attack step by step, with every step after the break-in marked ⛔ BLOCKED.
+
+Other attacks: `--scenario recon_bruteforce`, `malware_outbreak`, `insider_data_theft`, `privilege_abuse`. Slower or faster: `--delay 3`. Everything it creates is tagged *simulated*.
+
 ## 4. Command line
 
 | Command | Does |
